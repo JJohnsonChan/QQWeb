@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>圖片轉 Markdown / Excel 工具</title>
-    <!-- 引入 Marked.js 用於渲染 Markdown 表格 -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <title>圖片辨識轉 Excel 工具</title>
+    <!-- 引入 SheetJS (XLSX) 用於直接產生與下載 .xlsx 檔案 -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
-            --primary-color: #4a90e2;
+            --primary-color: #1f7244; /* Excel 綠 */
+            --primary-hover: #154c2e;
             --bg-color: #f4f7f6;
             --card-bg: #ffffff;
         }
@@ -58,14 +59,15 @@
             border-radius: 8px;
             padding: 40px;
             text-align: center;
-            background: #fafcfe;
+            background: #f0fdf4;
             cursor: pointer;
             transition: background 0.3s;
             margin-bottom: 20px;
         }
 
         .drop-zone:hover {
-            background: #eaf2fb;
+            background: #dcceeb;
+            background-color: #e2f7e9;
         }
 
         .preview-container {
@@ -78,7 +80,7 @@
         .preview-box {
             flex: 1;
             min-width: 300px;
-            max-height: 400px;
+            max-height: 350px;
             overflow: hidden;
             border: 1px solid #ddd;
             border-radius: 6px;
@@ -94,40 +96,26 @@
             object-fit: contain;
         }
 
-        .output-box {
-            flex: 1;
-            min-width: 300px;
-        }
-
-        textarea {
-            width: 100%;
-            height: 200px;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            box-sizing: border-box;
-            font-family: monospace;
-            resize: vertical;
-        }
-
         .actions {
             display: flex;
             gap: 10px;
-            margin-top: 10px;
+            margin-top: 15px;
         }
 
         button {
             background-color: var(--primary-color);
             color: white;
             border: none;
-            padding: 10px 20px;
+            padding: 12px 20px;
             border-radius: 6px;
             cursor: pointer;
             font-weight: bold;
+            font-size: 1rem;
+            transition: background 0.2s;
         }
 
         button:hover {
-            background-color: #357abd;
+            background-color: var(--primary-hover);
         }
 
         button:disabled {
@@ -135,8 +123,17 @@
             cursor: not-allowed;
         }
 
+        .download-btn {
+            background-color: #107c41;
+            display: none;
+        }
+
+        .download-btn:hover {
+            background-color: #0b592e;
+        }
+
         .rendered-html {
-            margin-top: 20px;
+            margin-top: 25px;
             border-top: 2px solid #eee;
             padding-top: 20px;
             overflow-x: auto;
@@ -146,35 +143,43 @@
             border-collapse: collapse;
             width: 100%;
             margin-top: 10px;
+            font-size: 0.9rem;
         }
 
         th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
+            border: 1px solid #ccc;
+            padding: 8px 10px;
+            text-align: center;
         }
 
         th {
-            background-color: #f2f2f2;
+            background-color: #e2efda;
+            color: #276a3c;
+            font-weight: bold;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
         }
 
         .loading {
             display: none;
             color: var(--primary-color);
             font-weight: bold;
-            margin-top: 10px;
+            margin-top: 15px;
+            text-align: center;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>圖片辨識轉 Markdown 表格</h1>
+    <h1>📷 圖片辨識直接轉 Excel (.xlsx)</h1>
 
     <div class="api-config">
         <label for="apiKey"><strong>Gemini API Key：</strong></label>
         <input type="password" id="apiKey" placeholder="請貼上您的 Google Gemini API Key">
-        <small><a href="https://aistudio.google.com/app/apikey" target="_blank">取得免費Key</a></small>
+        <small><a href="https://aistudio.google.com/app/apikey" target="_blank">取得免費 Key</a></small>
     </div>
 
     <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
@@ -187,26 +192,23 @@
             <img id="imagePreview" src="" alt="圖片預覽" style="display: none;">
             <span id="previewText">尚未上傳圖片</span>
         </div>
-        <div class="output-box">
-            <label><strong>Markdown 輸出結果：</strong></label>
-            <textarea id="markdownOutput" placeholder="辨識結果將顯示於此..."></textarea>
-            <div class="actions">
-                <button onclick="copyMarkdown()">複製 Markdown</button>
-            </div>
-        </div>
     </div>
 
-    <button id="processBtn" style="width: 100%;" onclick="processImage()" disabled>開始辨識提取表格</button>
-    <div class="loading" id="loadingText">⏳ AI 正在辨識提取資料中，請稍候...</div>
+    <button id="processBtn" style="width: 100%;" onclick="processImage()" disabled>開始辨識並提取表格</button>
+    <div class="loading" id="loadingText">⏳ AI 辨識中，請稍候...</div>
 
     <div class="rendered-html">
-        <h3>表格預覽：</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3>表格預覽：</h3>
+            <button id="downloadBtn" class="download-btn" onclick="downloadExcel()">📥 下載 Excel (.xlsx)</button>
+        </div>
         <div id="tableRender"></div>
     </div>
 </div>
 
 <script>
     let base64Image = "";
+    let extractedData = []; // 存放提取出的二維陣列資料
 
     // 拖曳上傳處理
     const dropZone = document.getElementById('dropZone');
@@ -239,17 +241,27 @@
     async function processImage() {
         const apiKey = document.getElementById('apiKey').value.trim();
         if (!apiKey) {
-            alert('請先填寫 Google Gemini API Key');
+            alert('請先填寫 Google API Key');
             return;
         }
 
         const processBtn = document.getElementById('processBtn');
         const loadingText = document.getElementById('loadingText');
+        const downloadBtn = document.getElementById('downloadBtn');
         
         processBtn.disabled = true;
         loadingText.style.display = 'block';
+        downloadBtn.style.display = 'none';
 
-        const prompt = "請辨識這張圖片中的所有表格資料，並嚴格將其提取轉換為標準的 Markdown 表格格式輸出。不需要其他多餘的解釋或開場白，直接輸出 Markdown 表格與其附註文字即可。";
+        // 提示 AI 直接回傳 JSON 陣列格式
+        const prompt = `請辨識圖片中的所有表格資料。請將表格內容嚴格轉換為 JSON 二維陣列格式（Array of Arrays）輸出。
+格式範例：
+[
+  ["日期", "姓名", "班別"],
+  ["1", "張三", "1345-2215"],
+  ["2", "李四", "休"]
+]
+請只輸出純 JSON 字串，不要包含任何 markdown 標記（如 \`\`\`json ）。`;
 
         try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
@@ -270,23 +282,56 @@
             if (data.error) {
                 alert('API 錯誤: ' + data.error.message);
             } else {
-                const textResult = data.candidates[0].content.parts[0].text;
-                document.getElementById('markdownOutput').value = textResult;
-                document.getElementById('tableRender').innerHTML = marked.parse(textResult);
+                let textResult = data.candidates[0].content.parts[0].text.trim();
+                // 清理可能的 Markdown 標記
+                textResult = textResult.replace(/^```json/g, '').replace(/^```/g, '').replace(/```$/g, '').trim();
+                
+                extractedData = JSON.parse(textResult);
+                
+                // 渲染預覽 HTML 表格
+                renderTable(extractedData);
+                downloadBtn.style.display = 'inline-block';
             }
         } catch (error) {
-            alert('請求失敗：' + error.message);
+            alert('辨識或解析失敗：' + error.message + '\n請確認圖片是否有清晰表格資料。');
         } finally {
             processBtn.disabled = false;
             loadingText.style.display = 'none';
         }
     }
 
-    function copyMarkdown() {
-        const text = document.getElementById('markdownOutput').value;
-        if (!text) return;
-        navigator.clipboard.writeText(text);
-        alert('已複製 Markdown 至剪貼簿！');
+    // 將資料繪製為網頁預覽表格
+    function renderTable(data) {
+        if (!data || data.length === 0) return;
+
+        let html = '<table>';
+        data.forEach((row, rowIndex) => {
+            html += '<tr>';
+            row.forEach(cell => {
+                if (rowIndex === 0) {
+                    html += `<th>${cell}</th>`;
+                } else {
+                    html += `<td>${cell}</td>`;
+                }
+            });
+            html += '</tr>';
+        });
+        html += '</table>';
+
+        document.getElementById('tableRender').innerHTML = html;
+    }
+
+    // 觸發下載 Excel 檔案 (.xlsx)
+    function downloadExcel() {
+        if (!extractedData || extractedData.length === 0) return;
+
+        // 建立 SheetJS 工作表與工作簿
+        const worksheet = XLSX.utils.aoa_to_sheet(extractedData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+
+        // 自動匯出為 .xlsx 檔
+        XLSX.writeFile(workbook, "提取資料表.xlsx");
     }
 </script>
 
