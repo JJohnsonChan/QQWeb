@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出勤異常稽核</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --paper:#EBEEE5;
+    --card:#FBFCF8;
+    --ink:#20281D;
+    --ink-soft:#5B6552;
+    --rule:#D3D7C7;
+    --brass:#93712A;
+    --brass-deep:#6F5620;
+    --flag:#93302A;
+    --flag-bg:#F4E4E1;
+    --ok:#2E6A56;
+    --ok-bg:#E4EFE7;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+    line-height:1.6;
+  }
+  .wrap{
+    max-width:920px;
+    margin:0 auto;
+    padding:56px 24px 90px;
+  }
+  .masthead{
+    border-bottom:2px solid var(--ink);
+    padding-bottom:22px;
+    margin-bottom:36px;
+  }
+  .masthead .tag{
+    font-size:13px;
+    letter-spacing:.12em;
+    color:var(--brass-deep);
+    margin:0 0 10px;
+  }
+  h1{
+    font-family:"Noto Serif TC","PMingLiU",serif;
+    font-weight:700;
+    font-size:34px;
+    margin:0 0 12px;
+    letter-spacing:.02em;
+  }
+  .masthead p{
+    margin:0;
+    color:var(--ink-soft);
+    font-size:15px;
+    max-width:560px;
+  }
+  .rules{
+    margin-top:18px;
+    font-size:13.5px;
+    color:var(--ink-soft);
+  }
+  .rules ul{margin:6px 0 0; padding-left:20px;}
+  .rules li{margin:3px 0;}
+
+  .dropzone{
+    border:1.5px dashed var(--brass);
+    background:var(--card);
+    border-radius:2px;
+    padding:38px 24px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+    position:relative;
+  }
+  .dropzone.drag{
+    border-color:var(--flag);
+    background:#F6F3EA;
+  }
+  .dropzone .icon{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:26px;
+    color:var(--brass);
+    display:block;
+    margin-bottom:10px;
+  }
+  .dropzone .main{
+    font-size:16px;
+    font-weight:600;
+  }
+  .dropzone .sub{
+    font-size:13px;
+    color:var(--ink-soft);
+    margin-top:6px;
+  }
+  .dropzone input{
+    position:absolute; inset:0; opacity:0; cursor:pointer;
+  }
+
+  .filename{
+    margin-top:14px;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    font-family:"IBM Plex Mono",monospace;
+  }
+
+  .error-box{
+    margin-top:16px;
+    border-left:3px solid var(--flag);
+    background:var(--flag-bg);
+    padding:12px 16px;
+    font-size:14px;
+    color:var(--flag);
+    display:none;
+  }
+
+  .results{ margin-top:48px; display:none; }
+
+  .sheet-tabs{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-bottom:18px;
+  }
+  .sheet-tabs button{
+    font-family:"Noto Sans TC",sans-serif;
+    font-size:13px;
+    background:var(--card);
+    color:var(--ink-soft);
+    border:1px solid var(--rule);
+    padding:7px 14px;
+    cursor:pointer;
+  }
+  .sheet-tabs button.active{
+    background:var(--ink);
+    color:var(--card);
+    border-color:var(--ink);
+  }
+  .sheet-tabs button .n{
+    font-family:"IBM Plex Mono",monospace;
+    margin-left:5px;
+    opacity:.75;
+  }
+
+  .summary{
+    display:flex;
+    gap:0;
+    border:1px solid var(--rule);
+    background:var(--card);
+    margin-bottom:32px;
+  }
+  .summary .stat{
+    flex:1;
+    padding:18px 14px;
+    text-align:center;
+    border-right:1px solid var(--rule);
+  }
+  .summary .stat:last-child{border-right:none;}
+  .summary .stat .num{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:26px;
+    font-weight:600;
+    display:block;
+  }
+  .summary .stat .num.flagged{ color:var(--flag); }
+  .summary .stat .label{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-top:4px;
+  }
+
+  .section-title{
+    font-family:"Noto Serif TC",serif;
+    font-size:19px;
+    font-weight:700;
+    margin:0 0 6px;
+    border-bottom:1px solid var(--ink);
+    padding-bottom:8px;
+  }
+  .section-note{
+    font-size:13px;
+    color:var(--ink-soft);
+    margin:8px 0 16px;
+  }
+
+  .toolbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin:22px 0 10px;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+  .toggle{
+    font-size:13.5px;
+    color:var(--ink-soft);
+    display:flex;
+    align-items:center;
+    gap:6px;
+    cursor:pointer;
+    user-select:none;
+  }
+  .toggle input{ accent-color: var(--brass); }
+
+  button.export{
+    font-family:"Noto Sans TC",sans-serif;
+    font-size:13.5px;
+    background:var(--ink);
+    color:var(--card);
+    border:none;
+    padding:9px 16px;
+    cursor:pointer;
+  }
+  button.export:hover{ background:var(--brass-deep); }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13.5px;
+  }
+  thead th{
+    text-align:left;
+    font-weight:600;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    border-bottom:1px solid var(--ink);
+    padding:8px 8px;
+    white-space:nowrap;
+  }
+  tbody td{
+    padding:9px 8px;
+    border-bottom:1px solid var(--rule);
+    white-space:nowrap;
+    font-family:"IBM Plex Mono",monospace;
+    font-size:13px;
+  }
+  tbody td.name-cell, tbody td.status-cell{
+    font-family:"Noto Sans TC",sans-serif;
+  }
+  tbody tr.flagged{ background:var(--flag-bg); }
+  tbody tr.flagged td{ color:var(--ink); }
+
+  .tag{
+    display:inline-block;
+    font-size:11.5px;
+    padding:2px 7px;
+    margin:0 3px 3px 0;
+    border:1px solid var(--flag);
+    color:var(--flag);
+    background:#fff;
+  }
+  .tag.ok{
+    border-color:var(--ok);
+    color:var(--ok);
+  }
+
+  .empty-state{
+    text-align:center;
+    padding:40px 20px;
+    color:var(--ink-soft);
+    font-size:14px;
+    display:none;
+  }
+
+  footer{
+    margin-top:60px;
+    padding-top:18px;
+    border-top:1px solid var(--rule);
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+
+  @media (max-width:640px){
+    .summary{flex-wrap:wrap;}
+    .summary .stat{flex:1 1 50%; border-right:1px solid var(--rule);}
+    h1{font-size:27px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <p class="tag">出勤紀錄稽核工具</p>
+    <h1>出勤異常稽核</h1>
+    <p>上傳出勤紀錄 Excel，自動比對每筆排定班別，找出遲到、早退、休息超時與總時數落差。支援多個頁籤，會自動逐一掃描。</p>
+    <div class="rules">
+      判定規則：
+      <ul>
+        <li>遲到 — 實際上班時間晚於排定班別的上班時間</li>
+        <li>早退 — 當日最後一次刷卡下班時間早於排定班別的下班時間</li>
+        <li>休息異常 — 下班到下一段上班之間的休息時間超過 30 分鐘</li>
+        <li>總時數異常 — 總時數與「排定班長 − 休息時間」相差超過 1 小時</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="dropzone" id="dropzone">
+    <span class="icon">⏱</span>
+    <div class="main">拖曳檔案到這裡，或點擊選擇 Excel 檔</div>
+    <div class="sub">支援 .xlsx／.xls，第一欄需為班別代碼（例如 1000-1800）</div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+  </div>
+  <div class="filename" id="filename"></div>
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="results" id="results">
+
+    <div class="sheet-tabs" id="sheetTabs"></div>
+
+    <div class="summary" id="summary"></div>
+
+    <div class="section-title">逐日稽核結果</div>
+    <div class="section-note">標記橘紅底色的列表示當日存在一項或多項異常。</div>
+
+    <div class="toolbar">
+      <label class="toggle">
+        <input type="checkbox" id="onlyFlagged">
+        只顯示異常紀錄
+      </label>
+      <button class="export" id="exportBtn">下載稽核結果 (.xlsx)</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr id="headerRow"></tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+
+    <div class="empty-state" id="emptyState">目前篩選條件下沒有紀錄。</div>
+  </div>
+
+  <footer>
+    所有比對均在你的瀏覽器內完成，檔案不會上傳到任何伺服器。
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const filenameEl = document.getElementById('filename');
+  const errorBox = document.getElementById('errorBox');
+  const resultsEl = document.getElementById('results');
+  const sheetTabsEl = document.getElementById('sheetTabs');
+  const summaryEl = document.getElementById('summary');
+  const headerRow = document.getElementById('headerRow');
+  const tableBody = document.getElementById('tableBody');
+  const onlyFlagged = document.getElementById('onlyFlagged');
+  const emptyState = document.getElementById('emptyState');
+  const exportBtn = document.getElementById('exportBtn');
+
+  // currentSheets: [{ sheetName, header, data, results, distinctNames }]
+  let currentSheets = [];
+  let skippedSheets = [];
+  let activeSheet = 'ALL';
+
+  ['dragover','dragenter'].forEach(evt=>{
+    dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.add('drag'); });
+  });
+  ['dragleave','drop'].forEach(evt=>{
+    dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.remove('drag'); });
+  });
+  dropzone.addEventListener('drop', e=>{
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+  fileInput.addEventListener('change', e=>{
+    const f = e.target.files && e.target.files[0];
+    if (f) handleFile(f);
+  });
+
+  function showError(msg){
+    errorBox.textContent = msg;
+    errorBox.style.display = 'block';
+    resultsEl.style.display = 'none';
+  }
+  function clearError(){
+    errorBox.style.display = 'none';
+  }
+
+  function handleFile(file){
+    clearError();
+    filenameEl.textContent = '已選擇檔案：' + file.name;
+    const reader = new FileReader();
+    reader.onload = function(e){
+      try{
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        processWorkbook(wb);
+      }catch(err){
+        console.error(err);
+        showError('讀取檔案失敗，請確認檔案格式是否正確。（' + err.message + '）');
+      }
+    };
+    reader.onerror = function(){
+      showError('讀取檔案失敗，請重新選擇檔案。');
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function colIdx(header, name){ return header.indexOf(name); }
+
+  function timeToSeconds(str){
+    if (!str) return null;
+    const parts = String(str).trim().split(':').map(Number);
+    if (parts.length < 2 || parts.some(isNaN)) return null;
+    const h = parts[0], m = parts[1], s = parts[2] || 0;
+    return h*3600 + m*60 + s;
+  }
+
+  function timeToMinutes(str){
+    if (!str) return 0;
+    const parts = String(str).trim().split(':').map(Number);
+    if (parts.length < 2 || parts.some(isNaN)) return 0;
+    return parts[0]*60 + parts[1];
+  }
+
+  function parseSchedule(code){
+    if (!code) return null;
+    const str = String(code).trim();
+    // Match a leading "HHMM-HHMM" pattern even if trailing text follows
+    // (e.g. "0715-1315板橋", "1000-1800 A班"). Anchored at the start only.
+    const m = str.match(/^(\d{3,4})-(\d{3,4})/);
+    if (!m) return null;
+    const pad = x => x.padStart(4,'0');
+    const toSec = x => { const p = pad(x); return Number(p.slice(0,2))*3600 + Number(p.slice(2,4))*60; };
+    return { start: toSec(m[1]), end: toSec(m[2]), label: str };
+  }
+
+  function secToLabel(sec){
+    if (sec === null || sec === undefined) return '';
+    const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+    return [h,m,s].map((v,i)=> i===0? String(v).padStart(2,'0') : String(v).padStart(2,'0')).join(':');
+  }
+
+  function parseSheetRows(rows){
+    if (!rows || rows.length < 2) return null;
+    const header = rows[0];
+    const data = rows.slice(1).filter(r => r.some(c => String(c).trim() !== ''));
+    if (data.length === 0) return null;
+
+    const idx = {
+      date: colIdx(header,'日期'),
+      store: colIdx(header,'店名稱'),
+      empId: colIdx(header,'員工編號'),
+      name: colIdx(header,'姓名'),
+      clockIn: colIdx(header,'上班時間'),
+      out1: colIdx(header,'下班時間'),
+      in2: colIdx(header,'第二段上班時間'),
+      out2: colIdx(header,'第二段下班時間'),
+      in3: colIdx(header,'第三段上班時間'),
+      out3: colIdx(header,'第三段下班時間'),
+      total: colIdx(header,'總時數'),
+      break1: colIdx(header,'第一次休息時間'),
+      break2: colIdx(header,'第二次休息時間'),
+    };
+
+    // Not a matching attendance sheet — skip it.
+    if (idx.clockIn === -1 || idx.total === -1) return null;
+
+    const distinctNames = new Set();
+    const results = data.map(row=>{
+      const scheduleCode = row[0];
+      const sched = parseSchedule(scheduleCode);
+      const clockInStr = idx.clockIn>-1 ? row[idx.clockIn] : '';
+      const clockInSec = timeToSeconds(clockInStr);
+
+      const candidates = [
+        idx.out3>-1 ? row[idx.out3] : '',
+        idx.out2>-1 ? row[idx.out2] : '',
+        idx.out1>-1 ? row[idx.out1] : ''
+      ];
+      let finalOutStr = '';
+      for (const v of candidates){ if (v){ finalOutStr = v; break; } }
+      const finalOutSec = timeToSeconds(finalOutStr);
+
+      const late = !!(sched && clockInSec !== null && clockInSec > sched.start);
+      const early = !!(sched && finalOutSec !== null && finalOutSec < sched.end);
+      const lateMin = late ? Math.round((clockInSec - sched.start)/60*10)/10 : 0;
+      const earlyMin = early ? Math.round((sched.end - finalOutSec)/60*10)/10 : 0;
+
+      const break1Str = idx.break1>-1 ? row[idx.break1] : '';
+      const break2Str = idx.break2>-1 ? row[idx.break2] : '';
+      const break1Min = timeToMinutes(break1Str);
+      const break2Min = timeToMinutes(break2Str);
+      const breakOver30 = break1Min > 30 || break2Min > 30;
+
+      const totalHours = parseFloat(row[idx.total]) || 0;
+      let totalAnomaly = false;
+      let expected = null;
+      if (sched){
+        const schedDurHours = (sched.end - sched.start)/3600;
+        const breakHours = (break1Min + break2Min)/60;
+        expected = Math.round((schedDurHours - breakHours)*100)/100;
+        if (Math.abs(totalHours - expected) > 1) totalAnomaly = true;
+      }
+
+      const name = idx.name>-1 ? row[idx.name] : '';
+      if (name) distinctNames.add(name);
+
+      const flags = [];
+      if (late) flags.push('遲到 ' + lateMin + '分');
+      if (early) flags.push('早退 ' + earlyMin + '分');
+      if (breakOver30) flags.push('休息異常');
+      if (totalAnomaly) flags.push('總時數異常');
+
+      return {
+        date: idx.date>-1 ? row[idx.date] : '',
+        name: name,
+        schedule: scheduleCode,
+        schedStartLabel: sched ? secToLabel(sched.start) : '',
+        schedEndLabel: sched ? secToLabel(sched.end) : '',
+        clockIn: clockInStr,
+        finalOut: finalOutStr,
+        break1: break1Str,
+        break2: break2Str,
+        totalHours: totalHours,
+        expected: expected,
+        late, early, breakOver30, totalAnomaly,
+        flags,
+        isFlagged: late || early || breakOver30 || totalAnomaly
+      };
+    });
+
+    return { header, data, results, distinctNames };
+  }
+
+  function processWorkbook(wb){
+    currentSheets = [];
+    skippedSheets = [];
+
+    wb.SheetNames.forEach(sheetName=>{
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+      const parsed = parseSheetRows(rows);
+      if (parsed){
+        currentSheets.push(Object.assign({ sheetName }, parsed));
+      } else {
+        skippedSheets.push(sheetName);
+      }
+    });
+
+    if (currentSheets.length === 0){
+      showError('找不到符合格式的頁籤（需要有「上班時間」與「總時數」欄位）。已檢查的頁籤：' + wb.SheetNames.join('、'));
+      return;
+    }
+
+    activeSheet = 'ALL';
+    renderSheetTabs();
+    renderActiveSheet();
+    resultsEl.style.display = 'block';
+
+    if (skippedSheets.length){
+      errorBox.textContent = '已略過 ' + skippedSheets.length + ' 個頁籤（欄位格式不符）：' + skippedSheets.join('、');
+      errorBox.style.display = 'block';
+      errorBox.style.borderLeftColor = 'var(--brass)';
+      errorBox.style.background = '#F6F1E2';
+      errorBox.style.color = 'var(--brass-deep)';
+    }
+  }
+
+  function renderSheetTabs(){
+    if (currentSheets.length <= 1){
+      sheetTabsEl.innerHTML = '';
+      return;
+    }
+    const tabs = [{ key:'ALL', label:'全部頁籤' }, ...currentSheets.map(s=>({ key:s.sheetName, label:s.sheetName }))];
+    sheetTabsEl.innerHTML = tabs.map(t=>{
+      const count = t.key === 'ALL'
+        ? currentSheets.reduce((sum,s)=>sum+s.results.length,0)
+        : currentSheets.find(s=>s.sheetName===t.key).results.length;
+      const active = activeSheet === t.key ? ' active' : '';
+      return '<button class="' + active.trim() + '" data-key="' + t.key + '">' + t.label + '<span class="n">' + count + '</span></button>';
+    }).join('');
+    Array.from(sheetTabsEl.querySelectorAll('button')).forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        activeSheet = btn.getAttribute('data-key');
+        renderSheetTabs();
+        renderActiveSheet();
+      });
+    });
+  }
+
+  function getActiveResults(){
+    if (activeSheet === 'ALL'){
+      const combined = [];
+      currentSheets.forEach(s=>{
+        s.results.forEach(r=> combined.push(Object.assign({ sheetName: s.sheetName }, r)));
+      });
+      return combined;
+    }
+    const sheet = currentSheets.find(s=>s.sheetName===activeSheet);
+    return sheet ? sheet.results.map(r=>Object.assign({ sheetName: sheet.sheetName }, r)) : [];
+  }
+
+  function renderActiveSheet(){
+    const results = getActiveResults();
+    const showSheetCol = activeSheet === 'ALL' && currentSheets.length > 1;
+    const distinctNames = new Set(results.map(r=>r.name).filter(Boolean));
+    renderSummary(results);
+    renderTable(results, distinctNames.size > 1, showSheetCol);
+  }
+
+  function renderSummary(results){
+    const total = results.length;
+    const lateCount = results.filter(r=>r.late).length;
+    const earlyCount = results.filter(r=>r.early).length;
+    const breakCount = results.filter(r=>r.breakOver30).length;
+    const totalAnomalyCount = results.filter(r=>r.totalAnomaly).length;
+
+    const stats = [
+      { num: total, label: '總紀錄數', flagged:false },
+      { num: lateCount, label: '遲到', flagged: lateCount>0 },
+      { num: earlyCount, label: '早退', flagged: earlyCount>0 },
+      { num: breakCount, label: '休息異常', flagged: breakCount>0 },
+      { num: totalAnomalyCount, label: '總時數異常', flagged: totalAnomalyCount>0 },
+    ];
+    summaryEl.innerHTML = stats.map(s=>
+      '<div class="stat"><span class="num' + (s.flagged?' flagged':'') + '">' + s.num + '</span><span class="label">' + s.label + '</span></div>'
+    ).join('');
+  }
+
+  function renderTable(results, showName, showSheet){
+    const cols = [
+      ...(showSheet ? [{ key:'sheetName', label:'頁籤' }] : []),
+      { key:'date', label:'日期' },
+      ...(showName ? [{ key:'name', label:'姓名' }] : []),
+      { key:'schedule', label:'排定班別' },
+      { key:'clockIn', label:'實際上班' },
+      { key:'finalOut', label:'實際下班' },
+      { key:'break1', label:'第一次休息' },
+      { key:'totalHours', label:'總時數' },
+      { key:'status', label:'狀態' },
+    ];
+    headerRow.innerHTML = cols.map(c=>'<th>'+c.label+'</th>').join('');
+
+    function draw(){
+      const filtered = onlyFlagged.checked ? results.filter(r=>r.isFlagged) : results;
+      if (filtered.length === 0){
+        tableBody.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+      }
+      emptyState.style.display = 'none';
+      tableBody.innerHTML = filtered.map(r=>{
+        const rowClass = r.isFlagged ? 'flagged' : '';
+        const cells = cols.map(c=>{
+          if (c.key === 'status'){
+            const tags = r.flags.length
+              ? r.flags.map(f=>'<span class="tag">'+f+'</span>').join('')
+              : '<span class="tag ok">正常</span>';
+            return '<td class="status-cell">'+tags+'</td>';
+          }
+          if (c.key === 'name' || c.key === 'sheetName'){
+            return '<td class="name-cell">'+(r[c.key]||'')+'</td>';
+          }
+          return '<td>'+(r[c.key] ?? '')+'</td>';
+        }).join('');
+        return '<tr class="'+rowClass+'">'+cells+'</tr>';
+      }).join('');
+    }
+
+    onlyFlagged.onchange = draw;
+    draw();
+  }
+
+  exportBtn.addEventListener('click', function(){
+    if (!currentSheets.length) return;
+    const wb = XLSX.utils.book_new();
+
+    currentSheets.forEach(sheet=>{
+      const newHeader = sheet.header.slice();
+      newHeader.push('遲到','早退','休息異常','總時數異常','狀態備註');
+
+      const newData = sheet.data.map((row, i)=>{
+        const r = sheet.results[i];
+        const copy = row.slice();
+        copy[newHeader.indexOf('遲到')] = r.late ? 'X' : '';
+        copy[newHeader.indexOf('早退')] = r.early ? 'X' : '';
+        copy[newHeader.indexOf('休息異常')] = r.breakOver30 ? 'X' : '';
+        copy[newHeader.indexOf('總時數異常')] = r.totalAnomaly ? 'X' : '';
+        copy[newHeader.indexOf('狀態備註')] = r.flags.join('、');
+        return copy;
+      });
+
+      const outRows = [newHeader, ...newData];
+      const ws = XLSX.utils.aoa_to_sheet(outRows);
+      // Excel sheet names: max 31 chars, no : \ / ? * [ ]
+      const safeName = String(sheet.sheetName).replace(/[:\\/?*\[\]]/g,'').slice(0,31) || 'Sheet';
+      XLSX.utils.book_append_sheet(wb, ws, safeName);
+    });
+
+    XLSX.writeFile(wb, '出勤異常稽核結果.xlsx');
+  });
+
+})();
+</script>
+</body>
+</html>
