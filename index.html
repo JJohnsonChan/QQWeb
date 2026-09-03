@@ -1,389 +1,294 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>排班表轉錄工具</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<style>
-  :root{
-    --paper:#EBEEE5;
-    --card:#FBFCF8;
-    --ink:#20281D;
-    --ink-soft:#5B6552;
-    --rule:#D3D7C7;
-    --brass:#93712A;
-    --brass-deep:#6F5620;
-    --flag:#93302A;
-    --flag-bg:#F4E4E1;
-    --warn-bg:#FFF3B0;
-    --ok:#2E6A56;
-  }
-  *{box-sizing:border-box;}
-  body{
-    margin:0;
-    background:var(--paper);
-    color:var(--ink);
-    font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
-    line-height:1.6;
-  }
-  .wrap{ max-width:980px; margin:0 auto; padding:56px 24px 90px; }
-  .masthead{ border-bottom:2px solid var(--ink); padding-bottom:22px; margin-bottom:36px; }
-  .masthead .tag{ font-size:13px; letter-spacing:.12em; color:var(--brass-deep); margin:0 0 10px; }
-  h1{ font-family:"Noto Serif TC","PMingLiU",serif; font-weight:700; font-size:32px; margin:0 0 12px; }
-  .masthead p{ margin:0; color:var(--ink-soft); font-size:15px; max-width:620px; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>圖片轉 Markdown / Excel 工具</title>
+    <!-- 引入 Marked.js 用於渲染 Markdown 表格 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+        }
 
-  .dropzone{
-    border:1.5px dashed var(--brass);
-    background:var(--card);
-    padding:38px 24px;
-    text-align:center;
-    cursor:pointer;
-    position:relative;
-  }
-  .dropzone.drag{ border-color:var(--flag); background:#F6F3EA; }
-  .dropzone .icon{ font-size:26px; color:var(--brass); display:block; margin-bottom:10px; }
-  .dropzone .main{ font-size:16px; font-weight:600; }
-  .dropzone .sub{ font-size:13px; color:var(--ink-soft); margin-top:6px; }
-  .dropzone input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
 
-  .preview-row{
-    display:flex; gap:20px; margin-top:20px; align-items:flex-start; flex-wrap:wrap;
-  }
-  .preview-row img{
-    max-width:220px; border:1px solid var(--rule); background:#fff;
-  }
-  .preview-meta{ font-size:13px; color:var(--ink-soft); font-family:"IBM Plex Mono",monospace; }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        }
 
-  button.primary{
-    font-family:"Noto Sans TC",sans-serif;
-    font-size:14px;
-    background:var(--ink);
-    color:var(--card);
-    border:none;
-    padding:10px 20px;
-    cursor:pointer;
-    margin-top:16px;
-  }
-  button.primary:disabled{ background:#9AA091; cursor:default; }
-  button.secondary{
-    font-family:"Noto Sans TC",sans-serif;
-    font-size:13px;
-    background:var(--card);
-    color:var(--ink);
-    border:1px solid var(--rule);
-    padding:8px 14px;
-    cursor:pointer;
-  }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
 
-  .status{
-    margin-top:18px;
-    font-size:13.5px;
-    color:var(--ink-soft);
-    display:none;
-  }
-  .status.active{ display:block; }
-  .spinner{
-    display:inline-block; width:12px; height:12px;
-    border:2px solid var(--rule); border-top-color:var(--brass);
-    border-radius:50%; margin-right:8px;
-    animation:spin 0.8s linear infinite; vertical-align:-2px;
-  }
-  @keyframes spin{ to{ transform:rotate(360deg); } }
+        .api-config {
+            background: #eef5fc;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
 
-  .error-box{
-    margin-top:16px; border-left:3px solid var(--flag); background:var(--flag-bg);
-    padding:12px 16px; font-size:14px; color:var(--flag); display:none; white-space:pre-wrap;
-  }
-  .warn-box{
-    margin-top:16px; border-left:3px solid var(--brass); background:var(--warn-bg);
-    padding:14px 16px; font-size:13.5px; color:var(--brass-deep); display:none;
-  }
-  .warn-box ul{ margin:6px 0 0; padding-left:20px; }
-  .warn-box li{ margin:3px 0; }
+        .api-config input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
 
-  .results{ margin-top:44px; display:none; }
-  .section-title{
-    font-family:"Noto Serif TC",serif; font-size:19px; font-weight:700;
-    margin:0 0 6px; border-bottom:1px solid var(--ink); padding-bottom:8px;
-  }
-  .section-note{ font-size:13px; color:var(--ink-soft); margin:8px 0 16px; }
+        .drop-zone {
+            border: 2px dashed var(--primary-color);
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            background: #fafcfe;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-bottom: 20px;
+        }
 
-  .toolbar{ display:flex; justify-content:space-between; align-items:center; margin:18px 0 12px; flex-wrap:wrap; gap:10px; }
+        .drop-zone:hover {
+            background: #eaf2fb;
+        }
 
-  table{ width:100%; border-collapse:collapse; font-size:13px; }
-  thead th{
-    text-align:left; font-weight:600; font-size:12px; color:var(--ink-soft);
-    border-bottom:1px solid var(--ink); padding:7px 7px; white-space:nowrap;
-  }
-  tbody td{
-    padding:6px 7px; border-bottom:1px solid var(--rule); border-right:1px solid var(--rule);
-    font-family:"IBM Plex Mono",monospace; font-size:12.5px; min-width:70px;
-  }
-  tbody td[contenteditable="true"]:focus{ outline:2px solid var(--brass); outline-offset:-2px; }
-  tbody td.note-cell{ font-family:"Noto Sans TC",sans-serif; font-size:12px; min-width:220px; color:var(--brass-deep); }
-  tbody tr.uncertain td{ background:var(--warn-bg); }
-  tbody tr.uncertain td.note-cell{ background:#FFF9DD; }
+        .preview-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
 
-  footer{ margin-top:60px; padding-top:18px; border-top:1px solid var(--rule); font-size:12px; color:var(--ink-soft); }
-</style>
+        .preview-box {
+            flex: 1;
+            min-width: 300px;
+            max-height: 400px;
+            overflow: hidden;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #eee;
+        }
+
+        .preview-box img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .output-box {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-family: monospace;
+            resize: vertical;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background-color: #357abd;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .rendered-html {
+            margin-top: 20px;
+            border-top: 2px solid #eee;
+            padding-top: 20px;
+            overflow-x: auto;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .loading {
+            display: none;
+            color: var(--primary-color);
+            font-weight: bold;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
-<div class="wrap">
 
-  <div class="masthead">
-    <p class="tag">AI 輔助轉錄工具</p>
-    <h1>手寫排班表轉錄工具</h1>
-    <p>上傳排班表照片（手寫或印刷、含更正註記皆可），AI 會嘗試判讀成表格。凡是字跡不清、有更正痕跡、或 AI 沒有信心的格子，都會標黃色請你核對，表格可以直接在畫面上編輯後再匯出。</p>
-  </div>
+<div class="container">
+    <h1>圖片辨識轉 Markdown 表格</h1>
 
-  <div class="dropzone" id="dropzone">
-    <span class="icon">📷</span>
-    <div class="main">拖曳照片到這裡，或點擊選擇圖片檔</div>
-    <div class="sub">支援 .jpg／.png／.webp，建議拍攝時光線充足、盡量對正拍平</div>
-    <input type="file" id="fileInput" accept="image/*">
-  </div>
-
-  <div class="preview-row" id="previewRow" style="display:none;">
-    <img id="previewImg" alt="上傳的排班表照片">
-    <div class="preview-meta" id="previewMeta"></div>
-  </div>
-
-  <button class="primary" id="processBtn" style="display:none;">開始判讀</button>
-
-  <div class="status" id="statusBox"><span class="spinner"></span><span id="statusText">AI 正在判讀照片，請稍候...</span></div>
-  <div class="error-box" id="errorBox"></div>
-
-  <div class="results" id="results">
-    <div class="warn-box" id="warnBox"></div>
-
-    <div class="section-title">判讀結果</div>
-    <div class="section-note">黃色底色 = AI 判斷該列有字跡不清或更正痕跡，已盡力猜測填入。表格可直接點擊編輯修正，修正後再匯出即可。</div>
-
-    <div class="toolbar">
-      <span style="font-size:13px;color:var(--ink-soft);" id="summaryText"></span>
-      <div>
-        <button class="secondary" id="reprocessBtn">重新判讀這張照片</button>
-        <button class="primary" id="exportBtn" style="margin-top:0;">下載為 Excel</button>
-      </div>
+    <div class="api-config">
+        <label for="apiKey"><strong>Gemini API Key：</strong></label>
+        <input type="password" id="apiKey" placeholder="請貼上您的 Google Gemini API Key">
+        <small><a href="https://aistudio.google.com/app/apikey" target="_blank">取得免費Key</a></small>
     </div>
 
-    <div style="overflow-x:auto;">
-      <table>
-        <thead><tr id="headerRow"></tr></thead>
-        <tbody id="tableBody"></tbody>
-      </table>
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <p>點擊上傳圖片，或直接將圖片拖曳至此處</p>
+        <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFile(this.files[0])">
     </div>
-  </div>
 
-  <footer>
-    判讀結果由 AI 視覺模型產生，僅供輔助整理，正式使用前請務必對照紙本原件核對，尤其留意黃色標記的格子。
-  </footer>
+    <div class="preview-container">
+        <div class="preview-box">
+            <img id="imagePreview" src="" alt="圖片預覽" style="display: none;">
+            <span id="previewText">尚未上傳圖片</span>
+        </div>
+        <div class="output-box">
+            <label><strong>Markdown 輸出結果：</strong></label>
+            <textarea id="markdownOutput" placeholder="辨識結果將顯示於此..."></textarea>
+            <div class="actions">
+                <button onclick="copyMarkdown()">複製 Markdown</button>
+            </div>
+        </div>
+    </div>
 
+    <button id="processBtn" style="width: 100%;" onclick="processImage()" disabled>開始辨識提取表格</button>
+    <div class="loading" id="loadingText">⏳ AI 正在辨識提取資料中，請稍候...</div>
+
+    <div class="rendered-html">
+        <h3>表格預覽：</h3>
+        <div id="tableRender"></div>
+    </div>
 </div>
 
 <script>
-(function(){
-  const dropzone = document.getElementById('dropzone');
-  const fileInput = document.getElementById('fileInput');
-  const previewRow = document.getElementById('previewRow');
-  const previewImg = document.getElementById('previewImg');
-  const previewMeta = document.getElementById('previewMeta');
-  const processBtn = document.getElementById('processBtn');
-  const reprocessBtn = document.getElementById('reprocessBtn');
-  const statusBox = document.getElementById('statusBox');
-  const statusText = document.getElementById('statusText');
-  const errorBox = document.getElementById('errorBox');
-  const resultsEl = document.getElementById('results');
-  const warnBox = document.getElementById('warnBox');
-  const headerRow = document.getElementById('headerRow');
-  const tableBody = document.getElementById('tableBody');
-  const exportBtn = document.getElementById('exportBtn');
-  const summaryText = document.getElementById('summaryText');
+    let base64Image = "";
 
-  let currentImageBase64 = null;
-  let currentMediaType = null;
-  let currentParsed = null;
-
-  ['dragover','dragenter'].forEach(evt=>{
-    dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.add('drag'); });
-  });
-  ['dragleave','drop'].forEach(evt=>{
-    dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.remove('drag'); });
-  });
-  dropzone.addEventListener('drop', e=>{
-    const f = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (f) handleFile(f);
-  });
-  fileInput.addEventListener('change', e=>{
-    const f = e.target.files && e.target.files[0];
-    if (f) handleFile(f);
-  });
-
-  function showError(msg){
-    errorBox.textContent = msg;
-    errorBox.style.display = 'block';
-  }
-  function clearError(){ errorBox.style.display = 'none'; }
-  function setStatus(msg){
-    statusText.textContent = msg;
-    statusBox.classList.add('active');
-  }
-  function clearStatus(){ statusBox.classList.remove('active'); }
-
-  function handleFile(file){
-    clearError();
-    resultsEl.style.display = 'none';
-    const reader = new FileReader();
-    reader.onload = function(e){
-      const img = new Image();
-      img.onload = function(){
-        // Resize so the longer side is at most 1600px, to keep payload reasonable.
-        const maxSide = 1600;
-        let { width, height } = img;
-        const scale = Math.min(1, maxSide / Math.max(width, height));
-        const cw = Math.round(width * scale), ch = Math.round(height * scale);
-        const canvas = document.createElement('canvas');
-        canvas.width = cw; canvas.height = ch;
-        canvas.getContext('2d').drawImage(img, 0, 0, cw, ch);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-        currentMediaType = 'image/jpeg';
-        currentImageBase64 = dataUrl.split(',')[1];
-
-        previewImg.src = dataUrl;
-        previewMeta.innerHTML = '檔名：' + file.name + '<br>原始尺寸：' + width + '×' + height + '<br>送出尺寸：' + cw + '×' + ch;
-        previewRow.style.display = 'flex';
-        processBtn.style.display = 'inline-block';
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  }
-
-  const PROMPT = [
-    "這是一張員工排班表的照片，可能是手寫、印刷，或兩者混合，並可能有筆跡更正、圈選、劃掉重寫等註記。",
-    "請你仔細判讀，並「只」回覆一個 JSON 物件，不要有任何說明文字、不要用 markdown 的 ``` 包起來。",
-    "JSON 格式如下：",
-    '{"columns": ["欄位1名稱","欄位2名稱", ...], "rows": [ {"date":"日期文字","weekday":"星期文字","values":["欄位1的值","欄位2的值", ...],"uncertain":true或false,"note":"若uncertain為true，用一句話說明哪裡不確定、為什麼（例如：字跡被劃掉重寫、與簽名重疊、圈選註記看不清楚等），若uncertain為false則為空字串"} , ... ] , "warnings": ["整體性的提醒，例如某個欄位標題本身就看不清楚姓名"] }',
-    "規則：",
-    "1. columns 請依照表格從左到右實際的欄位（通常是員工姓名），照片中的欄位標題如果本身字跡不清楚無法確定姓名，就在該欄位名稱後面加上「(姓名不確定)」。",
-    "2. rows 請包含表格中每一列，依照原始順序。date 用照片上寫的日期或序號文字。",
-    "3. 每一列的 values 陣列長度要跟 columns 陣列長度一致，且順序對應。空白格請填空字串 \"\"。",
-    "4. 只要某一列有任何一格是手寫更正、劃掉重寫、字跡模糊、與其他筆跡重疊、或你沒有把握的內容，就把該列 uncertain 設為 true，並在 note 簡短說明原因與位置（例如「第X欄有紅筆更正字跡，疊在原字上」）。不確定時寧可標記 uncertain，不要漏掉。",
-    "5. 完全確定、清楚工整的列，uncertain 設為 false，note 為空字串。",
-    "6. 如果整張表格有整體性的問題（例如某欄位姓名整欄都看不清楚），寫進最外層的 warnings 陣列。",
-    "請直接輸出 JSON，不要有任何其他文字。"
-  ].join("\n");
-
-  async function callClaude(){
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "image", source: { type: "base64", media_type: currentMediaType, data: currentImageBase64 } },
-              { type: "text", text: PROMPT }
-            ]
-          }
-        ]
-      })
+    // 拖曳上傳處理
+    const dropZone = document.getElementById('dropZone');
+    dropZone.addEventListener('dragover', (e) => e.preventDefault());
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer.files.length) {
+            handleFile(e.dataTransfer.files[0]);
+        }
     });
-    const data = await response.json();
-    const textBlocks = (data.content || []).filter(b=>b.type==='text').map(b=>b.text);
-    let text = textBlocks.join('\n').trim();
-    text = text.replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
-    let parsed;
-    try{
-      parsed = JSON.parse(text);
-    }catch(err){
-      throw new Error('AI 回覆的內容不是有效的 JSON，原始回覆：\n' + text.slice(0, 500));
-    }
-    if (!parsed.columns || !parsed.rows){
-      throw new Error('AI 回覆缺少必要欄位（columns / rows），原始回覆：\n' + text.slice(0, 500));
-    }
-    return parsed;
-  }
 
-  async function process(){
-    if (!currentImageBase64) return;
-    clearError();
-    resultsEl.style.display = 'none';
-    processBtn.disabled = true;
-    reprocessBtn.disabled = true;
-    setStatus('AI 正在判讀照片，請稍候...（表格較大時可能需要一點時間）');
-    try{
-      const parsed = await callClaude();
-      currentParsed = parsed;
-      renderResults(parsed);
-      resultsEl.style.display = 'block';
-    }catch(err){
-      console.error(err);
-      showError('判讀失敗：' + err.message);
-    }finally{
-      clearStatus();
-      processBtn.disabled = false;
-      reprocessBtn.disabled = false;
-    }
-  }
+    function handleFile(file) {
+        if (!file || !file.type.startsWith('image/')) {
+            alert('請上傳有效的圖片檔案');
+            return;
+        }
 
-  processBtn.addEventListener('click', process);
-  reprocessBtn.addEventListener('click', process);
-
-  function renderResults(parsed){
-    const columns = parsed.columns || [];
-    const rows = parsed.rows || [];
-    const warnings = parsed.warnings || [];
-
-    if (warnings.length){
-      warnBox.innerHTML = '<strong>整體性提醒：</strong><ul>' + warnings.map(w=>'<li>'+escapeHtml(w)+'</li>').join('') + '</ul>';
-      warnBox.style.display = 'block';
-    } else {
-      warnBox.style.display = 'none';
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            base64Image = e.target.result.split(',')[1];
+            const img = document.getElementById('imagePreview');
+            img.src = e.target.result;
+            img.style.display = 'block';
+            document.getElementById('previewText').style.display = 'none';
+            document.getElementById('processBtn').disabled = false;
+        };
+        reader.readAsDataURL(file);
     }
 
-    const headers = ['日期','星期', ...columns, '不確定原因說明'];
-    headerRow.innerHTML = headers.map(h=>'<th>'+escapeHtml(h)+'</th>').join('');
+    async function processImage() {
+        const apiKey = document.getElementById('apiKey').value.trim();
+        if (!apiKey) {
+            alert('請先填寫 Google Gemini API Key');
+            return;
+        }
 
-    tableBody.innerHTML = rows.map(r=>{
-      const rowClass = r.uncertain ? 'uncertain' : '';
-      const cells = [
-        '<td contenteditable="true">'+escapeHtml(r.date||'')+'</td>',
-        '<td contenteditable="true">'+escapeHtml(r.weekday||'')+'</td>',
-        ...columns.map((c,i)=>'<td contenteditable="true">'+escapeHtml((r.values && r.values[i]) || '')+'</td>'),
-        '<td class="note-cell" contenteditable="true">'+escapeHtml(r.note||'')+'</td>'
-      ];
-      return '<tr class="'+rowClass+'">'+cells.join('')+'</tr>';
-    }).join('');
+        const processBtn = document.getElementById('processBtn');
+        const loadingText = document.getElementById('loadingText');
+        
+        processBtn.disabled = true;
+        loadingText.style.display = 'block';
 
-    const uncertainCount = rows.filter(r=>r.uncertain).length;
-    summaryText.textContent = '共 ' + rows.length + ' 列，其中 ' + uncertainCount + ' 列被標記為不確定（黃色）。';
-  }
+        const prompt = "請辨識這張圖片中的所有表格資料，並嚴格將其提取轉換為標準的 Markdown 表格格式輸出。不需要其他多餘的解釋或開場白，直接輸出 Markdown 表格與其附註文字即可。";
 
-  function escapeHtml(s){
-    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { text: prompt },
+                            { inline_data: { mime_type: "image/jpeg", data: base64Image } }
+                        ]
+                    }]
+                })
+            });
 
-  exportBtn.addEventListener('click', function(){
-    if (!currentParsed) return;
-    const table = tableBody.closest('table');
-    const rowsData = [];
-    const headCells = Array.from(headerRow.querySelectorAll('th')).map(th=>th.textContent);
-    rowsData.push(headCells);
-    Array.from(tableBody.querySelectorAll('tr')).forEach(tr=>{
-      rowsData.push(Array.from(tr.querySelectorAll('td')).map(td=>td.textContent));
-    });
-    const ws = XLSX.utils.aoa_to_sheet(rowsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '排班表');
-    XLSX.writeFile(wb, '排班表轉錄結果.xlsx');
-  });
+            const data = await response.json();
+            
+            if (data.error) {
+                alert('API 錯誤: ' + data.error.message);
+            } else {
+                const textResult = data.candidates[0].content.parts[0].text;
+                document.getElementById('markdownOutput').value = textResult;
+                document.getElementById('tableRender').innerHTML = marked.parse(textResult);
+            }
+        } catch (error) {
+            alert('請求失敗：' + error.message);
+        } finally {
+            processBtn.disabled = false;
+            loadingText.style.display = 'none';
+        }
+    }
 
-})();
+    function copyMarkdown() {
+        const text = document.getElementById('markdownOutput').value;
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        alert('已複製 Markdown 至剪貼簿！');
+    }
 </script>
+
 </body>
 </html>
